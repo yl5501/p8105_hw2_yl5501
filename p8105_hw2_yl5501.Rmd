@@ -1,12 +1,7 @@
 ---
 title: "Homework 2"
 author: Yujie Li
-date: 2024-09-30 
-output: 
-  html_document:
-    toc: true 
-    toc_float: true 
-   
+date: 2024-09-30
 output: github_document 
 ---
 
@@ -15,6 +10,7 @@ output: github_document
 library(tidyverse)
 library(janitor)
 library(readr)
+library(tidyr)
 ```
 
 
@@ -35,104 +31,206 @@ nyc_ts
 ## The dimension of the resulting dataset is 1868 x 13 (rows x columns). 
 ## These data are relatively tidy comparing to the original one, but the routes served could be further tidied (there are too many columns for routes).
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# Section 1
-
-Here's a **code chunk** that samples from 
-a _normal distribution_:
-
 ```{r}
-samp = rnorm(100)
-length(samp)
+# Number of distinct stations (identified by both station name and line)
+distinct_stations <- nyc_ts %>%
+  distinct(station_name, line) %>%
+  count()
+
+# Number of ADA compliant stations
+ada_compliant_stations <- nyc_ts %>%
+  filter(ada == TRUE) %>%
+  distinct(station_name, line) %>%
+  count()
+
+# Proportion of entrances/exits without vending that allow entrance
+proportion_without_vending_allow_entry <- nyc_ts %>%
+  filter(vending == "NO") %>%
+  summarise(proportion = mean(entry))
+
+distinct_stations
+ada_compliant_stations
+proportion_without_vending_allow_entry
 ```
 
-# Section 2
+## There are 465 distinct stations. 
+## 84 stations are ADA compliant.
+## About 37.7% of station entries/exits without vending allow entrance. 
 
-I can take the mean of the sample, too!
-The mean is `r mean(samp)`.
-
-
-```{r learning_assessment_1}
-library(tidyverse)
-
-la_df = tibble(
-  norm_samp = rnorm(500, mean = 1),
-  norm_samp_pos = norm_samp > 0,
-  abs_norm_samp = abs(norm_samp)
-)
-
-ggplot(la_df, aes(x = abs_norm_samp)) + geom_histogram()
-
-median_samp = median(pull(la_df, norm_samp))
+## Reformat
+```{r}
+nyc_ts_long <- nyc_ts %>%
+  pivot_longer(
+    cols = starts_with("route"),   # Pivot route1, route2, route3, etc.
+    names_to = "route_number",     # Name of the new column for route numbers
+    values_to = "route"            # Name of the new column for route names
+  ) %>%
+  filter(!is.na(route))  # Remove rows with NA routes
 ```
 
-The median of the variable containing absolute values is 
-`r round(median_samp, digits = 2)`.
+```{r}
+stations_a_train <- nyc_ts_long %>%
+  filter(route == "A") %>%
+  distinct(station_name, line) %>%
+  count()
+
+ada_compliant_a_train <- nyc_ts_long %>%
+  filter(route == "A", ada == TRUE) %>%
+  distinct(station_name, line) %>%
+  count()
+
+stations_a_train
+ada_compliant_a_train
+```
+
+## 60 distinct stations serve the A train.
+## 17 of those are ADA compliant.
+
+
+## Problem 2
+```{r}
+mr_trash_wheel = 
+  readxl::read_excel("data/202309 Trash Wheel Collection Data.xlsx", sheet = "Mr. Trash Wheel") |> 
+  clean_names() |>  
+  filter(!is.na(dumpster)) |>  
+  mutate(sports_balls = as.integer(round(sports_balls, 0)))  
+ trash_wheel = "Mr. Trash Wheel"
+mr_trash_wheel
+```
+
 
 ```{r}
-la_df = 
-  tibble(
-    norm_samp = rnorm(n = 500, mean = 1),
-    samp_g0 = norm_samp > 0,
-    obs_v_samp = obs(norm_samp)
+prof_trash_wheel = 
+  readxl::read_excel("data/202309 Trash Wheel Collection Data.xlsx", sheet = "Professor Trash Wheel") |> 
+  clean_names() |> 
+  filter(!is.na(dumpster)) |>  
+  mutate(
+    sports_balls = NA_integer_,
+    trash_wheel = "Professor Trash Wheel" 
   )
-
-  ggplot(la_df, aes(x = abs_norm_samp)) + 
-    geom_histogram()
+prof_trash_wheel
 ```
 
-text formatting 
-------------------------------------------------------------
 
-*italic*  or  _italic_
-**bold**  or  __bold__
-`code`
-superscript^2^ and subscript~2~
-
-
-Headings
-------------------------------------------------------------
-
-# 1st Level Header
-
-## 2nd Level Header
-
-### 3rd Level Header
+```{r}
+gwynnda_trash_wheel =  
+  readxl::read_excel("data/202309 Trash Wheel Collection Data.xlsx", sheet = "Gwynnda Trash Wheel") |> 
+  clean_names() |> 
+  filter(!is.na(dumpster)) |> 
+  mutate(
+    sports_balls =  NA_integer_,  
+    trash_wheel = "Gwynnda Trash Wheel"  
+  )
+gwynnda_trash_wheel
+```
 
 
-Lists
-------------------------------------------------------------
-
-*   Bulleted list item 1
-
-*   Item 2
-
-    * Item 2a
-
-    * Item 2b
-
-1.  Numbered list item 1
-
-1.  Item 2. The numbers are incremented automatically in the output.
+```{r}
+combined_data <- mr_trash_wheel %>%
+  left_join(prof_trash_wheel, by = "dumpster") %>%
+  left_join(gwynnda_trash_wheel, by = "dumpster")
+combined_data
+```
+## There are 585 observations in the combined dataset. 
 
 
-Tables 
-------------------------------------------------------------
 
-First Header  | Second Header
-------------- | -------------
-Content Cell  | Content Cell
-Content Cell  | Content Cell
+```{r}
+combined_data <- combined_data %>%
+  mutate(trash_wheel = str_trim(trash_wheel)) 
+```
+
+
+
+```{r}
+# Total weight of trash collected by Professor Trash Wheel
+total_weight_professor <- combined_data %>%
+  filter(trash_wheel == "Professor Trash Wheel") %>%
+  summarise(total_weight = sum(weight_tons, na.rm = TRUE))
+
+total_weight_professor$total_weight
+
+# Total number of cigarette butts collected by Gwynnda in June 2022
+cig_butts_gwynnda_june <- combined_data %>%
+  filter(trash_wheel == "Gwynnda Trash Wheel", month == "June", year == 2022) %>%
+  summarise(total_cig_butts = sum(cigarette_butts, na.rm = TRUE))
+
+cig_butts_gwynnda_june$total_cig_butts
+```
+
+
+
+## Problem 3
+```{r}
+bakers_df = 
+  read_csv(
+    "data/bakers.csv",
+    na = c("NA", "", ".")) |>
+  janitor::clean_names() |>
+separate (baker_name, into = c ("baker", "last_name"), sep = " ")
+bakers_df
+```
+
+
+```{r}
+bakes_df = 
+  read_csv(
+    "data/bakes.csv",
+    na = c("NA", "", ".")) |>
+  janitor::clean_names() 
+
+bakes_df
+```
+
+```{r}
+results_df = 
+  read_csv(
+    "data/results.csv",
+    na = c("NA", "", "."), skip = 2) |>
+  janitor::clean_names() 
+
+results_df
+```
+
+
+```{r}
+viewers_df = 
+  read_csv(
+    "data/viewers.csv",
+    na = c("NA", "", ".")) |>
+  janitor::clean_names() 
+viewers_df
+```
+
+```{r}
+unmatched_bakers_in_results =
+  anti_join(results_df, bakers_df, by = "baker")
+unmatched_bakers_in_results
+```
+
+```{r}
+unmatched_bakers_in_bakes =
+  anti_join(bakes_df, bakers_df, by = "baker")
+unmatched_bakers_in_bakes
+```
+
+
+
+```{r}
+combined_data <- bakers_df %>%
+  left_join(results_df, by = c("baker", "series"))
+combined_data
+
+# Merge the combined dataset with bakes
+final_combined_data <- combined_data %>%
+  left_join(bakes_df, by = c("baker", "episode"))
+```
+
+```{r}
+write_csv(final_combined_data, "data/final_combined_gbbo.csv")
+```
+
+## Describe the data cleaning process:
+After importing the csv file, I eliminate unmeaningful rows in results file. For consistency among the 4 datasets, I decide to seperate the baker_name column in bakes file into baker and last_name. 
+A question I have is what the optimal way is to deal with the N/A value for techincal and result column.
+
