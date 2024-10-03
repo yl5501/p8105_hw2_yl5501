@@ -202,6 +202,26 @@ viewers_df =
 viewers_df
 ```
 
+
+```{r}
+bakers_df <- bakers_df %>%
+  mutate(baker = str_trim(tolower(baker)))
+
+results_df <- results_df %>%
+  mutate(baker = str_trim(tolower(baker)))
+
+bakes_df <- bakes_df %>%
+  mutate(baker = str_trim(tolower(baker)))
+
+bakers_df
+results_df
+bakes_df
+```
+
+
+
+
+
 ```{r}
 unmatched_bakers_in_results =
   anti_join(results_df, bakers_df, by = "baker")
@@ -210,21 +230,26 @@ unmatched_bakers_in_results
 
 ```{r}
 unmatched_bakers_in_bakes =
-  anti_join(bakes_df, bakers_df, by = "baker")
+  anti_join(bakes_df, bakers_df, by = "baker", "seasons")
 unmatched_bakers_in_bakes
+
+
+bakes_df <- bakes_df %>%
+  rename(series = season)
+bakes_df
 ```
-
-
 
 ```{r}
+# Merge bakers_df with results_df by baker and series
 combined_data <- bakers_df %>%
   left_join(results_df, by = c("baker", "series"))
-combined_data
 
-# Merge the combined dataset with bakes
+# Merge the combined dataset with bakes_df by baker, series, and episode
 final_combined_data <- combined_data %>%
-  left_join(bakes_df, by = c("baker", "episode"))
+  left_join(bakes_df, by = c("baker", "series", "episode"))
+final_combined_data
 ```
+
 
 ```{r}
 write_csv(final_combined_data, "data/final_combined_gbbo.csv")
@@ -233,4 +258,66 @@ write_csv(final_combined_data, "data/final_combined_gbbo.csv")
 ## Describe the data cleaning process:
 After importing the csv file, I eliminate unmeaningful rows in results file. For consistency among the 4 datasets, I decide to seperate the baker_name column in bakes file into baker and last_name. 
 A question I have is what the optimal way is to deal with the N/A value for techincal and result column.
+The final dataset includes the baker's first name, last name, age, hometown, occupation, series and results from each episodes including the technical rankings.  
+
+
+
+## Create a table for Star Baker / winner
+```{r}
+unique(combined_data$result)
+```
+
+
+```{r}
+combined_data <- combined_data %>%
+  mutate(result = str_trim(tolower(result)))
+
+star_bakers <- combined_data %>%
+  filter(series >= 5 & series <= 10, result %in% c("Star Baker", "winner")) %>%
+  select(series, episode, baker, result) %>%
+  arrange(series, episode)
+star_bakers
+```
+## Comment on the table above:
+Predictable overall winners - Nadiya and Rahul.
+Suprises - David (not a star baker until the finale)
+
+
+## Import, clean, tidy, and organize the viewership data in viewers.csv
+
+```{r}
+library(dplyr)
+library(readr)
+```
+
+```{r}
+viewers_df =
+  read_csv("data/viewers.csv") |> 
+  janitor::clean_names()  
+
+viewers_df %>% 
+  head(10) #Showing the first 10 rows. 
+```
+```{r}
+viewers_long_df <- viewers_df %>%
+  pivot_longer(cols = starts_with("series_"), 
+               names_to = "series", 
+               values_to = "viewership") %>%
+  mutate(series = as.numeric(gsub("series_", "", series)))  
+
+average_viewership_s1 <- viewers_long_df %>%
+  filter(series == 1) %>%
+  summarize(avg_viewership = mean(viewership, na.rm = TRUE))
+
+average_viewership_s5 <- viewers_long_df %>%
+  filter(series == 5) %>%
+  summarize(avg_viewership = mean(viewership, na.rm = TRUE))
+
+
+average_viewership_s1
+average_viewership_s5
+
+```
+## The average viewership in season 1 is 2.77.
+## The average viewership in season 5 is 10.0393. 
 
